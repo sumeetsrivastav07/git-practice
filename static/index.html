@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Resume Analyzer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      padding: 30px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    textarea, input[type="file"] {
+      width: 100%;
+      margin-top: 8px;
+      margin-bottom: 15px;
+      padding: 10px;
+    }
+    button {
+      padding: 10px 16px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    pre {
+      background: #eee;
+      padding: 15px;
+      white-space: pre-wrap;
+      border-radius: 6px;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>AI Resume Analyzer & Job Recommendation</h1>
+
+  <div class="container">
+
+    <h3>Upload Resume (PDF)</h3>
+    <input type="file" id="resumeFile" accept=".pdf">
+
+    <h3>OR Paste Resume Text</h3>
+    <textarea id="resumeInput" rows="6" placeholder="Paste resume text here..."></textarea>
+
+    <h3>Paste Job Description</h3>
+    <textarea id="jobInput" rows="6" placeholder="Paste job description here..."></textarea>
+
+    <button id="analyzeBtn">Analyze Resume</button>
+    <button id="recommendBtn">Recommend Jobs</button>
+
+    <h3>Analysis Result</h3>
+    <pre id="resultBox">---</pre>
+
+    <h3>Job Recommendations</h3>
+    <pre id="recommendBox">---</pre>
+
+  </div>
+
+<script>
+const analyzeBtn = document.getElementById("analyzeBtn");
+const recommendBtn = document.getElementById("recommendBtn");
+const resumeFile = document.getElementById("resumeFile");
+const resumeInput = document.getElementById("resumeInput");
+const jobInput = document.getElementById("jobInput");
+const resultBox = document.getElementById("resultBox");
+const recommendBox = document.getElementById("recommendBox");
+
+// -------------------- ANALYZE BUTTON --------------------
+analyzeBtn.addEventListener("click", async () => {
+  resultBox.textContent = "Analyzing...";
+
+  try {
+    let response;
+
+    // If PDF uploaded -> use /analyze-file
+    if (resumeFile.files.length > 0) {
+      const formData = new FormData();
+      formData.append("resume_file", resumeFile.files[0]);
+      formData.append("job", jobInput.value);
+
+      response = await fetch("/analyze-file", {
+        method: "POST",
+        body: formData
+      });
+    }
+    // Else -> use /analyze (JSON)
+    else {
+      response = await fetch("/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume: resumeInput.value,
+          job: jobInput.value
+        })
+      });
+    }
+
+    const data = await response.json();
+
+    resultBox.textContent =
+      `Rule-based score: ${data.rule_based_score}%\n` +
+      `AI semantic score: ${data.ai_semantic_score}%\n\n` +
+      `Matched skills: ${data.matched_skills.join(", ") || "None"}\n` +
+      `Missing skills: ${data.missing_skills.join(", ") || "None"}`;
+
+  } catch (err) {
+    resultBox.textContent = "Error: " + err.message;
+  }
+});
+
+// -------------------- RECOMMEND JOBS BUTTON --------------------
+recommendBtn.addEventListener("click", async () => {
+  recommendBox.textContent = "Finding best jobs...";
+
+  try {
+    let response;
+
+    if (resumeFile.files.length > 0) {
+      const formData = new FormData();
+      formData.append("resume_file", resumeFile.files[0]);
+
+      response = await fetch("/recommend-jobs-file", {
+        method: "POST",
+        body: formData
+      });
+    } else {
+      recommendBox.textContent = "Please upload a resume PDF for job recommendations.";
+      return;
+    }
+
+    const jobs = await response.json();
+
+    if (!jobs || jobs.length === 0) {
+      recommendBox.textContent = "No suitable jobs found.";
+      return;
+    }
+
+    let out = "";
+    jobs.forEach((job, idx) => {
+      out += `${idx + 1}. ${job.job_title} (Score: ${job.score}%)\n`;
+      out += `   ✔ Matched must-have: ${job.matched_must_have.join(", ") || "None"}\n`;
+      out += `   ✔ Matched bonus: ${job.matched_good_to_have.join(", ") || "None"}\n`;
+      out += `   ✖ Missing must-have: ${job.missing_must_have.join(", ") || "None"}\n\n`;
+    });
+
+    recommendBox.textContent = out;
+
+  } catch (err) {
+    recommendBox.textContent = "Error: " + err.message;
+  }
+});
+</script>
+
+</body>
+</html>
